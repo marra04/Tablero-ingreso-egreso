@@ -139,7 +139,12 @@ tr.detail-row table td{border-bottom:0.5px solid rgba(77,157,224,0.08);padding:5
     <div class="notif" id="notif"></div>
   </div>
   <div class="section">
-    <div class="sec-title">Transacciones</div>
+    <div class="sec-title">Transacciones
+      <div style="display:flex;gap:8px;align-items:center">
+        <span id="selCount" style="font-size:11px;color:var(--txt3);display:none"></span>
+        <button class="btn btn-red" id="btnDelSel" style="display:none;padding:4px 10px;font-size:12px">🗑 Eliminar seleccionados</button>
+      </div>
+    </div>
     <div class="filters">
       <label>Tipo</label><select id="flT"><option value="">Todos</option><option>Efectivo</option><option>Cheque</option></select>
       <label>Categoría</label><select id="flC"><option value="">Todas</option></select>
@@ -153,7 +158,7 @@ tr.detail-row table td{border-bottom:0.5px solid rgba(77,157,224,0.08);padding:5
       <div class="stot"><div class="stot-lbl">Registros</div><div class="stot-val acc" id="stR">0</div><div class="stot-tag" id="stRc">—</div></div>
     </div>
     <div style="overflow-x:auto">
-      <table><thead><tr><th>Fecha</th><th>Semana</th><th>Tipo</th><th>Categoría</th><th>Mov.</th><th style="text-align:right">Monto</th><th>Obs.</th><th></th></tr></thead>
+      <table><thead><tr><th style="width:32px"><input type="checkbox" id="chkAll" title="Seleccionar todos"></th><th>Fecha</th><th>Semana</th><th>Tipo</th><th>Categoría</th><th>Mov.</th><th style="text-align:right">Monto</th><th>Obs.</th><th></th></tr></thead>
       <tbody id="txB"></tbody></table>
     </div>
     <div class="pag"><span id="pgI"></span><button class="pb" id="pp">‹ Ant</button><button class="pb" id="pn">Sig ›</button></div>
@@ -515,8 +520,33 @@ $('btnGuardar').addEventListener('click',function(){
   notify('✓ Registro guardado.');
 });
 
-// ---- TABLA ----
-$('txB').addEventListener('click',function(e){
+// ---- SELECCIÓN MÚLTIPLE ----
+$('txB').addEventListener('change',function(e){
+  if(e.target.classList.contains('rowChk')){
+    var id=parseFloat(e.target.getAttribute('data-id'));
+    if(e.target.checked)selected.add(id);else selected.delete(id);
+    var tr=e.target.closest('tr');
+    if(tr)tr.style.background=e.target.checked?'rgba(77,157,224,0.08)':'';
+    updateSelUI();
+  }
+});
+
+$('chkAll').addEventListener('change',function(){
+  var rows=filtered();var pageRows=rows.slice(pg*PG,(pg+1)*PG);
+  pageRows.forEach(function(r){
+    if($('chkAll').checked)selected.add(r.id);else selected.delete(r.id);
+  });
+  renderTx();
+});
+
+$('btnDelSel').addEventListener('click',function(){
+  if(!selected.size)return;
+  var n=selected.size;
+  data=data.filter(function(r){return!selected.has(r.id);});
+  selected.clear();
+  save();pg=0;buildFilterOptions();refresh();
+  notify('🗑 '+n+' registros eliminados.');
+});
   var btn=e.target.closest('[data-id]');if(!btn)return;
   var id=parseFloat(btn.getAttribute('data-id'));
   data=data.filter(function(r){return r.id!==id;});
