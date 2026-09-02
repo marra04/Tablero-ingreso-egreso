@@ -187,10 +187,19 @@ tr.detail-row table td{border-bottom:0.5px solid rgba(77,157,224,0.08);padding:5
     </div>
   </div>
   <div class="section">
-    <div class="sec-title">Evolución mensual
+    <div class="sec-title">Distribución mensual
       <div class="legend"><span><span class="ld" style="background:#2ec08a"></span>Ingresos</span><span><span class="ld" style="background:#e05a4d"></span>Egresos</span></div>
     </div>
-    <div style="position:relative;height:220px"><canvas id="cMes"></canvas></div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px">
+      <div>
+        <div style="font-size:11px;color:var(--txt3);text-align:center;margin-bottom:8px;text-transform:uppercase;letter-spacing:.4px">Ingresos por mes</div>
+        <div style="position:relative;height:220px"><canvas id="cMesIng"></canvas></div>
+      </div>
+      <div>
+        <div style="font-size:11px;color:var(--txt3);text-align:center;margin-bottom:8px;text-transform:uppercase;letter-spacing:.4px">Egresos por mes</div>
+        <div style="position:relative;height:220px"><canvas id="cMesEg"></canvas></div>
+      </div>
+    </div>
   </div>
 </div>
 
@@ -245,7 +254,7 @@ async function loadData(){
       r.semana='del 10 al 23';changed++;
     }
   });
-  if(changed>0){await save();}
+  if(changed>0){await save();notify('✓ '+changed+' registros de Agosto actualizados a "del 10 al 23"');}
   buildFilterOptions();
   refresh();
 }
@@ -386,13 +395,26 @@ function renderSemanal(){
   charts.sem=new Chart($('cSem'),{type:'bar',data:{labels:cL,datasets:[{label:'Ingresos',data:cI,backgroundColor:'rgba(46,192,138,0.75)'},{label:'Egresos',data:cE,backgroundColor:'rgba(224,90,77,0.75)'}]},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false}},scales:{x:{ticks:{color:'#8fa3be',font:{size:9},maxRotation:45,autoSkip:false},grid:{color:'rgba(77,157,224,0.07)'}},y:{ticks:{color:'#8fa3be',font:{size:10},callback:function(v){return fmtK(v);}},grid:{color:'rgba(77,157,224,0.07)'}}}}});
 }
 
+var CHART_COLORS=['#4d9de0','#2ec08a','#f0c040','#e05a4d','#9b59b6','#e67e22','#1abc9c','#e74c3c','#3498db','#2ecc71','#f39c12','#8e44ad'];
+
 function renderMensual(){
   var map={};
   data.forEach(function(r){if(r.mes<0||!r.anio)return;var key=r.anio+'-'+('0'+(r.mes+1)).slice(-2);if(!map[key])map[key]={label:MESES[r.mes]+' '+r.anio,filas:[]};map[key].filas.push(r);});
   var keys=Object.keys(map).sort();var tb=$('mesB');tb.innerHTML='';var acum=0;
   keys.forEach(function(k){var filas=map[k].filas;var ing=filas.filter(function(r){return r.monto>0;}).reduce(function(a,r){return a+r.monto;},0);var eg=filas.filter(function(r){return r.monto<0;}).reduce(function(a,r){return a+r.monto;},0);var sal=ing+eg;acum+=sal;var tr=document.createElement('tr');tr.className='expandable';tr.innerHTML='<td style="color:var(--acc)">'+map[k].label+'</td><td style="text-align:right;color:#2ec08a">'+fmt(ing)+'</td><td style="text-align:right;color:#e05a4d">'+fmt(Math.abs(eg))+'</td><td style="text-align:right;font-weight:500;color:'+(sal>=0?'#2ec08a':'#e05a4d')+'">'+fmt(sal)+'</td><td style="text-align:right;color:var(--acc)">'+fmt(acum)+'</td>';var detTr=document.createElement('tr');detTr.className='detail-row';detTr.style.display='none';var detTd=document.createElement('td');detTd.colSpan=5;detTd.innerHTML=makeDetalle(filas);detTr.appendChild(detTd);tr.addEventListener('click',function(){var o=tr.classList.toggle('open');detTr.style.display=o?'table-row':'none';});tb.appendChild(tr);tb.appendChild(detTr);});
-  if(charts.mes)charts.mes.destroy();if(!keys.length)return;
-  charts.mes=new Chart($('cMes'),{type:'bar',data:{labels:keys.map(function(k){return map[k].label.substring(0,3)+' '+k.substring(0,4);}),datasets:[{label:'Ingresos',data:keys.map(function(k){return Math.round(map[k].filas.filter(function(r){return r.monto>0;}).reduce(function(a,r){return a+r.monto;},0));}),backgroundColor:'rgba(46,192,138,0.75)'},{label:'Egresos',data:keys.map(function(k){return Math.round(Math.abs(map[k].filas.filter(function(r){return r.monto<0;}).reduce(function(a,r){return a+r.monto;},0)));}),backgroundColor:'rgba(224,90,77,0.75)'}]},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false}},scales:{x:{ticks:{color:'#8fa3be',font:{size:10},autoSkip:false,maxRotation:45},grid:{color:'rgba(77,157,224,0.07)'}},y:{ticks:{color:'#8fa3be',font:{size:10},callback:function(v){return fmtK(v);}},grid:{color:'rgba(77,157,224,0.07)'}}}}});
+
+  var labels=keys.map(function(k){return map[k].label.substring(0,3)+' '+k.substring(0,4);});
+  var ingData=keys.map(function(k){return Math.round(map[k].filas.filter(function(r){return r.monto>0;}).reduce(function(a,r){return a+r.monto;},0));});
+  var egData=keys.map(function(k){return Math.round(Math.abs(map[k].filas.filter(function(r){return r.monto<0;}).reduce(function(a,r){return a+r.monto;},0)));});
+  var colors=keys.map(function(k,i){return CHART_COLORS[i%CHART_COLORS.length];});
+  var pieOpts={responsive:true,maintainAspectRatio:false,plugins:{legend:{position:'bottom',labels:{color:'#8fa3be',font:{size:10},boxWidth:12,padding:8}},tooltip:{callbacks:{label:function(ctx){return ctx.label+': '+fmtK(ctx.raw);}}}}};
+
+  if(charts.mesIng)charts.mesIng.destroy();
+  if(charts.mesEg)charts.mesEg.destroy();
+  if(!keys.length)return;
+
+  charts.mesIng=new Chart($('cMesIng'),{type:'pie',data:{labels:labels,datasets:[{data:ingData,backgroundColor:colors,borderWidth:1,borderColor:'rgba(0,0,0,0.2)'}]},options:pieOpts});
+  charts.mesEg=new Chart($('cMesEg'),{type:'pie',data:{labels:labels,datasets:[{data:egData,backgroundColor:colors,borderWidth:1,borderColor:'rgba(0,0,0,0.2)'}]},options:pieOpts});
 }
 
 function refresh(){updateKPIs();renderTx();}
