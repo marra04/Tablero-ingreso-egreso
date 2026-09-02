@@ -1,4 +1,4 @@
-﻿<!DOCTYPE html>
+<!DOCTYPE html>
 <html lang="es">
 <head>
 <meta charset="UTF-8">
@@ -217,23 +217,35 @@ function notify(msg,ok){
   el._t=setTimeout(function(){el.style.display='none';},5000);
 }
 
+var LSKEY='tie_v1';
+
 async function save(){
   try{ await window.storage.set('data',JSON.stringify(data)); }catch(e){}
+  try{ localStorage.setItem(LSKEY,JSON.stringify(data)); }catch(e){}
 }
 
 async function loadData(){
+  data=[];
+  // 1. Intentar window.storage (Claude)
   try{
     var r=await window.storage.get('data');
-    data=r?JSON.parse(r.value):[];
-  }catch(e){data=[];}
-  // Corregir registros de Agosto 2026 sin semana
+    if(r&&r.value){data=JSON.parse(r.value);}
+  }catch(e){}
+  // 2. Si no hay datos, intentar localStorage (Netlify/offline)
+  if(!data.length){
+    try{
+      var ls=localStorage.getItem(LSKEY);
+      if(ls){data=JSON.parse(ls);}
+    }catch(e){}
+  }
+  // Corregir semana vacía en Agosto 2026
   var changed=0;
   data.forEach(function(r){
     if(r.mes===7&&r.anio===2026&&(!r.semana||r.semana.trim()==='')){ 
       r.semana='del 10 al 23';changed++;
     }
   });
-  if(changed>0){await save();notify('✓ '+changed+' registros de Agosto actualizados a "del 10 al 23"');}
+  if(changed>0){await save();}
   buildFilterOptions();
   refresh();
 }
@@ -497,27 +509,31 @@ $('flS').addEventListener('change',function(){pg=0;renderTx();});
 
 // ---- IMPORTAR ----
 $('btnExport').addEventListener('click',function(){
+  if(!data.length){notify('Esperá que carguen los datos primero.',false);return;}
   var json=JSON.stringify(data);
-  // Tomamos el HTML actual y reemplazamos la función loadData
-  // para que en la versión offline use los datos embebidos
-  var src=document.documentElement.outerHTML;
-  // 1. Inyectar datos como variable global
-  var dataScript='<script>var __OFFLINE_DATA__='+json+';<\/script>';
-  src=src.replace('<\/head>',dataScript+'<\/head>');
-  // 2. Reemplazar la función loadData por una versión offline
-  var offlineLoad='async function loadData(){'
-    +'data=(typeof __OFFLINE_DATA__!=="undefined"&&__OFFLINE_DATA__.length)?__OFFLINE_DATA__:[];'
-    +'var changed=0;'
-    +'data.forEach(function(r){if(r.mes===7&&r.anio===2026&&(!r.semana||r.semana.trim()==="")){r.semana="del 10 al 23";changed++;}});'
-    +'buildFilterOptions();refresh();}';
-  // Reemplazar la definición de loadData en el HTML exportado
-  src=src.replace(/async function loadData\(\)\{[\s\S]*?^}/m, offlineLoad);
-  var blob=new Blob([src],{type:'text/html;charset=utf-8'});
-  var a=document.createElement('a');
-  a.href=URL.createObjectURL(blob);
-  a.download='Tablero_Ingreso_Egreso.html';
-  a.click();
-  URL.revokeObjectURL(a.href);
+  var modal=document.createElement('div');
+  modal.style.cssText='position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,0.85);z-index:9999;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:20px';
+  var box=document.createElement('div');
+  box.style.cssText='background:var(--bg2);border:0.5px solid var(--brd2);border-radius:12px;padding:20px;width:100%;max-width:700px;display:flex;flex-direction:column;gap:12px';
+  box.innerHTML='<div style="font-size:13px;font-weight:500;color:var(--acc)">Exportar datos ('+data.length+' registros)</div>'
+    +'<div style="font-size:12px;color:var(--txt2)">Copiá este JSON → guardalo como <b>datos.json</b> → importalo en Netlify con el botón Importar</div>'
+    +'<textarea id="exportTxt" style="width:100%;height:200px;background:var(--bg3);color:var(--txt);border:0.5px solid var(--brd2);border-radius:6px;padding:8px;font-size:11px;resize:none;font-family:monospace" readonly>'+json+'</textarea>'
+    +'<div style="display:flex;gap:8px">'
+    +'<button id="copyBtn" class="btn btn-acc" style="flex:1">📋 Copiar ('+data.length+' registros)</button>'
+    +'<button id="closeBtn" class="btn btn-ghost">Cerrar</button>'
+    +'</div>';
+  modal.appendChild(box);
+  document.body.appendChild(modal);
+  var ta=document.getElementById('exportTxt');
+  ta.select();
+  document.getElementById('copyBtn').addEventListener('click',function(){
+    ta.select();
+    navigator.clipboard.writeText(ta.value).then(function(){
+      document.getElementById('copyBtn').textContent='✓ Copiado!';
+    }).catch(function(){document.execCommand('copy');document.getElementById('copyBtn').textContent='✓ Copiado!';});
+  });
+  document.getElementById('closeBtn').addEventListener('click',function(){document.body.removeChild(modal);});
+  modal.addEventListener('click',function(e){if(e.target===modal)document.body.removeChild(modal);});
 });
 $('fi').addEventListener('change',function(e){if(e.target.files[0]){loadFile(e.target.files[0]);e.target.value='';}});
 $('dz').addEventListener('dragover',function(e){e.preventDefault();$('dz').style.borderColor='var(--acc)';});
